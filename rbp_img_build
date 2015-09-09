@@ -10,39 +10,7 @@ SIZE=1024M
 PACKAGE_LIST="netbase,git-core,binutils,ca-certificates,wget,curl,openssh-server,kmod,ifupdown,initscripts,lsb-base,sudo,ifupdown,ca-certificates,less,manpages,dialog,ntpdate,cronutils,cron,coreutils,vim,nodejs,lxc,apparmor-utils,tmux,btrfs-tools"
 
 
-while getopt "h:r:p:d:m:i:s:k:" opt "$@"; do
-	case "$opt" in
-        h)
-            HOSTNAME="$OPTARG"
-            ;;
-        r)
-            ROOTTYPE="$OPTARG"
-            ;;
-        p)
-            PASSWD="$OPTARG"
-            ;;
-        d)
-            DISTRIBUTION="$OPTARG"
-            ;;
-        m)
-            MIRROR="$OPTARG"
-            ;;
-        i)
-            IMAGE="$OPTARGS"
-            ;;
-        s)
-            SIZE="$OPTARGS"
-            ;;
-        k)
-            PACKAGE_LIST="$OPTARGS"
-            ;;
-        *)
-            help
-            ;;
-	esac
-done
-
-function help(){
+function show_help(){
 cat <<END
 $0 [-h hostname] [-r filesystem_root_type] [-p password] [-d distribution_name] [-m mirror] [-i image_name] [-s image_size] [-k package_list]
 
@@ -63,6 +31,67 @@ function expand_packages(){
 	    echo --package $package
     done
 }
+
+function create_customize_script(){
+cat <<END > customize
+#!/bin/sh
+set -e # Exit on first error
+rootdir="\$1"
+cd "\$rootdir"
+cat <<EOF > etc/apt/sources.list
+deb http://ftp.es.debian.org/debian/ $DISTRIBUTION main contrib non-free
+EOF
+# Install non-free binary blob needed to boot Raspberry Pi.  This
+# install a kernel somewhere too.
+wget https://raw.github.com/Hexxeh/rpi-update/master/rpi-update \
+    -O \$rootdir/usr/bin/rpi-update
+chmod a+x \$rootdir/usr/bin/rpi-update
+mkdir -p \$rootdir/lib/modules
+touch \$rootdir/boot/start.elf
+chroot \$rootdir rpi-update
+END
+chmod +x customize
+}
+while getopts ":h:r:p:d:m:i:s:k:" opt; do
+	case $opt in
+        h)
+            HOSTNAME="$OPTARG"
+            ;;
+        r)
+            ROOTTYPE="$OPTARG"
+            ;;
+        p)
+            PASSWD="$OPTARG"
+            ;;
+        d)
+            DISTRIBUTION="$OPTARG"
+            ;;
+        m)
+            MIRROR="$OPTARG"
+            ;;
+        i)
+            IMAGE="$OPTARG"
+            ;;
+        s)
+            SIZE="$OPTARG"
+            ;;
+        k)
+            PACKAGE_LIST="$OPTARG"
+            ;;
+        \?)
+            echo"Invalid option $OPTARG"
+            show_help
+            exit 1
+            ;;
+        :)
+            echo "Option -$OPTARG requires an argument."
+            show_help
+            exit 1
+            ;;
+	esac
+done
+
+create_customize_script
 
 expand_packages | xargs sudo vmdebootstrap \
     --variant minbase \
