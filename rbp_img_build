@@ -1,0 +1,84 @@
+#!/bin/bash
+
+HOSTNAME=raspberry
+ROOTTYPE=ext4
+PASSWD=raspberry
+DISTRIBUTION=jessie
+MIRROR=http.es.debian.org/debian
+IMAGE=rbp2.img
+SIZE=1024M
+PACKAGE_LIST="netbase,git-core,binutils,ca-certificates,wget,curl,openssh-server,kmod,ifupdown,initscripts,lsb-base,sudo,ifupdown,ca-certificates,less,manpages,dialog,ntpdate,cronutils,cron,coreutils,vim,nodejs,lxc,apparmor-utils,tmux,btrfs-tools"
+
+
+while getopt "h:r:p:d:m:i:s:k:" opt "$@"; do
+	case "$opt" in
+        h)
+            HOSTNAME="$OPTARG"
+            ;;
+        r)
+            ROOTTYPE="$OPTARG"
+            ;;
+        p)
+            PASSWD="$OPTARG"
+            ;;
+        d)
+            DISTRIBUTION="$OPTARG"
+            ;;
+        m)
+            MIRROR="$OPTARG"
+            ;;
+        i)
+            IMAGE="$OPTARGS"
+            ;;
+        s)
+            SIZE="$OPTARGS"
+            ;;
+        k)
+            PACKAGE_LIST="$OPTARGS"
+            ;;
+        *)
+            help
+            ;;
+	esac
+done
+
+function help(){
+cat <<END
+$0 [-h hostname] [-r filesystem_root_type] [-p password] [-d distribution_name] [-m mirror] [-i image_name] [-s image_size] [-k package_list]
+
+  -h hotname          [default: raspberry] Hostname of the image.
+  -r file_system_type [default: ext4] Root filesystem type.
+  -p password         [default: raspberry] Root password.
+  -d distribution_name [default: jessie] Debian distribution name.
+  -m mirror           [default: http:/ftp.es.debian.org/debian] Mirror to use for download the distribution.
+  -i image_name       [default: rbp2.img] Image file to generate.
+  -s image_size       [default: 1024M] Image size.
+  -k package_list     Comma separated package list to include in the image.
+END
+}
+
+function expand_packages(){
+	IFS=,
+	for package in $PACKAGE_LIST; do
+	    echo --package $package
+    done
+}
+
+expand_packages | xargs sudo vmdebootstrap \
+    --variant minbase \
+    --arch armhf \
+    --distribution "$DISTRIBUTION" \
+    --mirror"$MIRROR" \
+    --image "$IMAGE" \
+    --size "$SIZE" \
+    --bootsize 64M \
+    --boottype vfat \
+    --roottype $ROOTTYPE \
+    --log-level debug \
+    --verbose \
+    --no-kernel \
+    --no-extlinux \
+    --root-password "$PASSWD" \
+    --hostname $HOSTNAME \
+    --foreign /usr/bin/qemu-arm-static \
+    --customize `pwd`/customize 
